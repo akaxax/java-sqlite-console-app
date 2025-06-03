@@ -3,90 +3,105 @@ package com.example;
 import java.sql.*;
 import java.util.Scanner;
 
+import java.sql.SQLException;
+import java.util.List;
+import java.util.Optional;
+import java.util.Scanner;
+
 public class App {
-    public static void main(String[] args) {
-        String url = "jdbc:sqlite:sample.db";
+    private UserRepository userRepository;
+    private Scanner scanner;
 
-        try (Connection conn = DriverManager.getConnection(url);
-             Scanner scanner = new Scanner(System.in)) {
+    public App(String dbUrl) {
+        this.userRepository = new UserRepository(dbUrl);
+        this.scanner = new Scanner(System.in);
+    }
 
-            Statement stmt = conn.createStatement();
-            stmt.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)");
+    public void run() {
+        while (true) {
+            displayMenu();
+            String input = scanner.nextLine();
 
-            while (true) {
-                System.out.println("\nMenu:");
-                System.out.println("1. Add user");
-                System.out.println("2. List users");
-                System.out.println("3. Update user");
-                System.out.println("4. Delete user");
-                System.out.println("5. Exit");
-                System.out.print("Choose an option: ");
-                String input = scanner.nextLine();
-
+            try {
                 switch (input) {
                     case "1":
-                        System.out.print("Enter name: ");
-                        String name = scanner.nextLine();
-                        String insertSql = "INSERT INTO users (name) VALUES (?)";
-                        try (PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
-                            pstmt.setString(1, name);
-                            pstmt.executeUpdate();
-                            System.out.println("User added!");
-                        }
+                        addUser();
                         break;
-
                     case "2":
-                        ResultSet rs = stmt.executeQuery("SELECT * FROM users");
-                        System.out.println("Users:");
-                        while (rs.next()) {
-                            System.out.println(rs.getInt("id") + ": " + rs.getString("name"));
-                        }
+                        listUsers();
                         break;
-
                     case "3":
-                        System.out.print("Enter user ID to update: ");
-                        int updateId = Integer.parseInt(scanner.nextLine());
-                        System.out.print("Enter new name: ");
-                        String newName = scanner.nextLine();
-                        String updateSql = "UPDATE users SET name = ? WHERE id = ?";
-                        try (PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
-                            pstmt.setString(1, newName);
-                            pstmt.setInt(2, updateId);
-                            int affected = pstmt.executeUpdate();
-                            if (affected > 0) {
-                                System.out.println("User updated!");
-                            } else {
-                                System.out.println("User not found.");
-                            }
-                        }
+                        updateUser();
                         break;
-
                     case "4":
-                        System.out.print("Enter user ID to delete: ");
-                        int deleteId = Integer.parseInt(scanner.nextLine());
-                        String deleteSql = "DELETE FROM users WHERE id = ?";
-                        try (PreparedStatement pstmt = conn.prepareStatement(deleteSql)) {
-                            pstmt.setInt(1, deleteId);
-                            int affected = pstmt.executeUpdate();
-                            if (affected > 0) {
-                                System.out.println("User deleted!");
-                            } else {
-                                System.out.println("User not found.");
-                            }
-                        }
+                        deleteUser();
                         break;
-
                     case "5":
                         System.out.println("Goodbye!");
                         return;
-
                     default:
                         System.out.println("Invalid choice. Try again.");
                 }
+            } catch (SQLException e) {
+                System.out.println("Database error: " + e.getMessage());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a number for ID.");
             }
-
-        } catch (SQLException e) {
-            System.out.println("Database error: " + e.getMessage());
         }
+    }
+
+    private void displayMenu() {
+        System.out.println("\nMenu:");
+        System.out.println("1. Add user");
+        System.out.println("2. List users");
+        System.out.println("3. Update user");
+        System.out.println("4. Delete user");
+        System.out.println("5. Exit");
+        System.out.print("Choose an option: ");
+    }
+
+    private void addUser() throws SQLException {
+        System.out.print("Enter name: ");
+        String name = scanner.nextLine();
+        userRepository.addUser(new User(name));
+    }
+
+    private void listUsers() throws SQLException {
+        List<User> users = userRepository.getAllUsers();
+        System.out.println("Users:");
+        if (users.isEmpty()) {
+            System.out.println("No users found.");
+        } else {
+            users.forEach(System.out::println);
+        }
+    }
+
+    private void updateUser() throws SQLException {
+        System.out.print("Enter user ID to update: ");
+        int updateId = Integer.parseInt(scanner.nextLine());
+        System.out.print("Enter new name: ");
+        String newName = scanner.nextLine();
+        User userToUpdate = new User(updateId, newName);
+        if (userRepository.updateUser(userToUpdate)) {
+            System.out.println("User updated!");
+        } else {
+            System.out.println("User not found.");
+        }
+    }
+
+    private void deleteUser() throws SQLException {
+        System.out.print("Enter user ID to delete: ");
+        int deleteId = Integer.parseInt(scanner.nextLine());
+        if (userRepository.deleteUser(deleteId)) {
+            System.out.println("User deleted!");
+        } else {
+            System.out.println("User not found.");
+        }
+    }
+
+    public static void main(String[] args) {
+        String url = "jdbc:sqlite:sample.db";
+        App app = new App(url);
+        app.run();
     }
 }
